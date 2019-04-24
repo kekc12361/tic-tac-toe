@@ -1,18 +1,18 @@
 window.addEventListener("load",Init);
 
-let GAME = {
+const GAME = {
     name : "",
     id : 0,
     headers: new Headers(),
-    website: "https://ttt-practice.azurewebsites.net"
+    website: "https://ttt-practice.azurewebsites.net",
+    canMove:false
 };
-
-GAME.headers.append('Content-Type', 'application/json');
 
 function Init() {
     let $radio = document.querySelectorAll('[data-component = "radioChoice"');
     let $nameBtn = document.querySelector('[data-component = "btnSubmit"');
     let $btnStart = document.querySelector('[data-component = "btnStart"]');
+    GAME.headers.append('Content-Type', 'application/json');
 
     $nameBtn.addEventListener("click",onButtonSubmit);
     $radio.forEach( radio => radio.addEventListener("change",onRadioChange));
@@ -55,6 +55,10 @@ function changeGameInnerHTML(){
 
 
 function onClick(event) {
+    if (!GAME.canMove){
+        return;
+    }
+
     let $elements = document.querySelectorAll('td');
     let $el = event.target;
     let x = $el.cellIndex;
@@ -63,6 +67,9 @@ function onClick(event) {
 
     $elements[x+y*3].innerHTML = getYourMark();
     $elements[x+y*3].removeEventListener("click",onClick);
+
+    createSpinner();
+    GAME.canMove = false;
     makeTurnFetch($elements,position);
 }
 
@@ -95,10 +102,13 @@ function onButtonStart() {
     }
 
     let $elements = document.querySelectorAll('td');
+    $elements.forEach( elem => elem.addEventListener("click",onClick));
+    GAME.canMove = false;
     startFetch($elements);
-
+    GAME.canMove = true;
     //block buttonStart
     document.querySelector('[data-component = "btnStart"]').removeEventListener("click",onButtonStart);
+
 }
 
 function startFetch(elements){
@@ -112,8 +122,6 @@ function startFetch(elements){
                 return Promise.reject()
             }
             if (response.ok){
-                elements.forEach( elem => elem.addEventListener("click",onClick));
-                console.log(response);
                 return response.json();
             }
             else{
@@ -126,8 +134,11 @@ function startFetch(elements){
             GAME.id = json.data.id;
 
             if (!json.data.canMove){
+                GAME.canMove = false;
+
                 setBanner("Ход опонента");
                 waitFetch(elements);
+                GAME.canMove = true;
             }
 
             setBanner("Ваш ход");
@@ -143,15 +154,17 @@ function waitFetch(elements){
         }),
         headers: GAME.headers
     })
-        .finally(() => createSpinner())
         .then((response) => response.json())
         .then( function (response){
-            let move = response.data.move;
-            elements[move].innerHTML = getEnemyMark();
-            elements[move].removeEventListener( "click", onClick);
+                let move = response.data.move;
+                elements[move].innerHTML = getEnemyMark();
+                elements[move].removeEventListener( "click", onClick);
+                GAME.canMove = true;
+                setBanner("Ваш ход");
+                deleteSpinner();
             }
         )
-        .finally(() => deleteSpinner())
+
 }
 
 function makeTurnFetch(elements,pos){
@@ -170,6 +183,8 @@ function makeTurnFetch(elements,pos){
                 setBanner("VICTORY!!!")
                 elements.forEach(elem => elem.removeEventListener("click",onClick));
                 return Promise.reject()
+            } else {
+                setBanner("Ход опонента")
             }
         })
         .then(function(){
